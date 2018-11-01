@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# This script will run just before the load balancer
+# starts routing to this container
+
+# Migrate the database
+python manage.py migrate
+
+# Custom
+# 
+# Add anything custom that needs to be run

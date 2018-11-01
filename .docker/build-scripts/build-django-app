@@ -1,0 +1,146 @@
+#!/bin/bash
+
+# Configure and build django
+# 
+# Steps:
+#   - Detect settings file
+#   - Disable debug mode
+#   - Configure django database
+#   - Configure django static files
+#   - Configure django allowed hosts
+#   - Configure django logging
+#   - Configure django secret key
+#   - Collect static assets
+
+set -e
+
+# ------------------------------------ Detect Settings
+
+# find the django settings file
+settings_file=$(grep -o -E '"DJANGO_SETTINGS_MODULE", ".+"' manage.py \
+                | tr -d '",' \
+                | awk '{ print $2 }' \
+                | sed 's/\./\//g' \
+                | sed 's/$/.py/')
+
+# ------------------------------------ Disable debug mode
+
+sed -i 's/DEBUG = True/DEBUG = False/g' $settings_file
+
+# ------------------------------------ Configure database
+
+# If postgres is in the requirements, let's configure that first
+if [[ `grep -i 'psycopg2' requirements.txt` ]]; then
+  cat <<END >> $settings_file
+  
+# Docker auto-config database
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'gonano',
+        'USER': os.environ.get('POSTGRES_USER'),
+        'PASSWORD': os.environ.get('POSTGRES_PASS'),
+        'HOST': os.environ.get('POSTGRES_HOST'),
+    }
+}
+END
+fi
+
+
+# If mysql is in the requirements, let's configure that
+if [[ `grep -i 'MySQLdb\|mysqlclient\|MySQL-python' requirements.txt` ]]; then
+  cat <<END >> $settings_file
+  
+# Docker auto-config database
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'gonano',
+        'USER': os.environ.get('MYSQL_USER'),
+        'PASSWORD': os.environ.get('MYSQL_PASS'),
+        'HOST': os.environ.get('MYSQL_HOST'),
+    }
+}
+END
+fi
+
+# ------------------------------------ Configure static files
+
+cat <<END >> $settings_file
+
+# Docker auto-config static files
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = '/static/'
+
+# Ensure STATIC_ROOT exists.
+os.makedirs(STATIC_ROOT, exist_ok=True)
+
+# Insert Whitenoise Middleware.
+try:
+    MIDDLEWARE_CLASSES = tuple(['whitenoise.middleware.WhiteNoiseMiddleware'] + list(MIDDLEWARE_CLASSES))
+except NameError:
+    MIDDLEWARE = tuple(['whitenoise.middleware.WhiteNoiseMiddleware'] + list(MIDDLEWARE))
+
+# Enable GZip.
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+END
+
+# ------------------------------------ Configure allowed hosts
+
+cat <<END >> $settings_file
+
+# Docker auto-config allowed hosts
+ALLOWED_HOSTS = ['*']
+END
+
+# ------------------------------------ Configure logging
+
+cat <<END >> $settings_file
+
+# Docker auto-config logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': ('%(asctime)s [%(process)d] [%(levelname)s] ' +
+                       'pathname=%(pathname)s lineno=%(lineno)s ' +
+                       'funcname=%(funcName)s %(message)s'),
+            'datefmt': '%Y-%m-%d %H:%M:%S'
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s'
+        }
+    },
+    'handlers': {
+        'null': {
+            'level': 'DEBUG',
+            'class': 'logging.NullHandler',
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose'
+        }
+    },
+    'loggers': {
+        'testlogger': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        }
+    }
+}
+END
+
+# ------------------------------------ Configure secret key
+
+cat <<END >> $settings_file
+
+# Docker auto-config secret_key
+SECRET_KEY = os.environ['SECRET_KEY']
+
+END
+
+# ------------------------------------ Collect static assets
+
+python manage.py collectstatic --noinput --traceback

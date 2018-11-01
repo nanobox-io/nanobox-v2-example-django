@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# This script will run right after the load balancer
+# starts routing to this container
+
+# Custom
+# 
+# Add anything custom that needs to be run
