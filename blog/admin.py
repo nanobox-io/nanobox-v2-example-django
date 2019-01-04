@@ -13,10 +13,10 @@ class PostAdminForm(forms.ModelForm):
     class Meta:
         model = Post
         exclude = ('author', 'created_date', 'updated_date', 'published_date')
-        widgets = {
-            'body': CKEditorUploadingWidget(),
-            'snippet': CKEditorUploadingWidget(config_name='small'),
-        }
+        # widgets = {
+        #     'body': CKEditorUploadingWidget(),
+        #     'snippet': CKEditorUploadingWidget(config_name='small'),
+        # }
 
 
 @admin.register(Post)
